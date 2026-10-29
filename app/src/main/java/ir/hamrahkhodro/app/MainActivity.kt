@@ -120,13 +120,31 @@ class MainActivity : Activity() {
         root = base()
         val scroller = ScrollView(this)
         val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL; setPadding(dp(24), dp(48), dp(24), dp(32)) }
-        val logo = TextView(this).apply {
-            text = "M"; textSize = 34f; typeface = Typeface.DEFAULT_BOLD; gravity = Gravity.CENTER; setTextColor(Color.WHITE)
-            background = rounded(teal, 24); layoutParams = LinearLayout.LayoutParams(dp(78), dp(78)).apply { bottomMargin = dp(20) }
+        val logoBox = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            background = rounded(teal, 28)
+            setPadding(dp(18), dp(16), dp(18), dp(16))
+            layoutParams = LinearLayout.LayoutParams(dp(110), dp(110)).apply { bottomMargin = dp(18) }
         }
-        body.addView(logo)
+        val logoIcon = TextView(this).apply {
+            text = "🚗"
+            textSize = 42f
+            gravity = Gravity.CENTER
+        }
+        val logoLetter = TextView(this).apply {
+            text = "MYCAR"
+            textSize = 11f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            setPadding(0, dp(2), 0, 0)
+        }
+        logoBox.addView(logoIcon)
+        logoBox.addView(logoLetter)
+        body.addView(logoBox)
         body.addView(label("MYCAR", 30f, deep, true).apply { gravity = Gravity.CENTER })
-        body.addView(label("همراه هوشمند نگهداری خودرو", 15f, muted, false).apply { gravity = Gravity.CENTER; setPadding(0, dp(8), 0, dp(26)) })
+        body.addView(label("همراه هوشمند نگهداری خودرو", 15f, muted, false).apply { gravity = Gravity.CENTER; setPadding(0, dp(8), 0, dp(26) ) })
         card(body) {
             addView(label("ورود یا ثبت‌نام", 20f, ink, true))
             addView(label("برای شروع، شماره موبایل ایران را وارد کن.", 13f, muted, false).apply { setPadding(0, dp(8), 0, dp(16)) })
@@ -273,7 +291,24 @@ class MainActivity : Activity() {
                 info.addView(label("${selected.optString("brand")} • ${selected.optString("year", "سال نامشخص")}", 12f, muted, false).apply { setPadding(0, dp(4), 0, 0) })
                 info.addView(label("کارکرد: ${selected.optString("km", "۰")} کیلومتر", 12f, teal, true).apply { setPadding(0, dp(4), 0, 0) })
                 line.addView(info); addView(line)
-                actionButtonIn(this, "تغییر خودروی فعال", false) { chooseActiveCar() }
+                actionButtonIn(this, "جابجایی بین خودروها / پروفایل‌ها", false) { chooseCarProfile() }
+            }
+            // Insurance reminders
+            val bodyExp = selected.optString("bodyInsuranceExpiry", "")
+            val thirdExp = selected.optString("thirdPartyInsuranceExpiry", "")
+            if (bodyExp.isNotBlank() || thirdExp.isNotBlank()) {
+                sectionTitle(content, "یادآوری بیمه")
+                card(content) {
+                    if (bodyExp.isNotBlank()) {
+                        addView(label("بیمه بدنه", 13f, ink, true))
+                        addView(label("تاریخ اتمام: $bodyExp  (یک‌ساله)", 12f, muted, false).apply { setPadding(0, dp(4), 0, dp(8)) })
+                    }
+                    if (thirdExp.isNotBlank()) {
+                        addView(label("بیمه شخص ثالث", 13f, ink, true))
+                        addView(label("تاریخ اتمام: $thirdExp  (یک‌ساله)", 12f, muted, false).apply { setPadding(0, dp(4), 0, 0) })
+                    }
+                    addView(label("برای تمدید، اطلاعات را در پروفایل خودرو به‌روز کن.", 11f, teal, false).apply { setPadding(0, dp(10), 0, 0) })
+                }
             }
             val id = selected.optString("id")
             val histories = load("history").filter { it.optString("vehicleId") == id }
@@ -315,7 +350,7 @@ class MainActivity : Activity() {
                 info.addView(label("${car.optString("brand")} • ${car.optString("year", "سال نامشخص")}", 12f, muted, false).apply { setPadding(0, dp(4), 0, 0) })
                 info.addView(label("${car.optString("km", "۰")} کیلومتر", 12f, teal, true).apply { setPadding(0, dp(4), 0, 0) })
                 row.addView(info); addView(row)
-                actionButtonIn(this, if (car.optString("id") == prefs.getString("active_car", "")) "خودروی فعال ✓" else "انتخاب به‌عنوان خودروی فعال", false) { prefs.edit().putString("active_car", car.optString("id")).apply(); tab = "خانه"; showApp() }
+                actionButtonIn(this, if (car.optString("id") == prefs.getString("selected_car", "")) "پروفایل انتخاب‌شده ✓" else "انتخاب این پروفایل", false) { prefs.edit().putString("selected_car", car.optString("id")).apply(); tab = "خانه"; showApp() }
                 actionButtonIn(this, "برنامه سرویس این مدل", false) { showMaintenancePlan(car) }
                 val delete = TextView(this@MainActivity).apply { text = "حذف خودرو"; gravity = Gravity.END; setTextColor(Color.rgb(176, 66, 66)); textSize = 12f; setPadding(0, dp(8), 0, 0); setOnClickListener { AlertDialog.Builder(this@MainActivity).setMessage("حذف این خودرو و سوابق مرتبط؟").setNegativeButton("انصراف", null).setPositiveButton("حذف") { _, _ -> deleteCar(car); showApp() }.show() } }
                 addView(delete)
@@ -337,9 +372,15 @@ class MainActivity : Activity() {
         val year = field("سال ساخت (مثلاً ۱۴۰۱)")
         val km = field("کارکرد فعلی به کیلومتر", "0", true)
         val plate = field("پلاک یا نام دلخواه (اختیاری)")
+        val bodyIns = field("تاریخ اتمام بیمه بدنه (مثلاً 1404/08/15) — یک‌ساله")
+        val thirdIns = field("تاریخ اتمام بیمه شخص ثالث (مثلاً 1404/08/15) — یک‌ساله")
         box.addView(label("برند خودرو", 12f, muted, true)); box.addView(brandSpinner)
         box.addView(label("مدل خودرو", 12f, muted, true).apply { setPadding(0, dp(8), 0, 0) }); box.addView(modelSpinner)
+        box.addView(label("اطلاعات پایه", 13f, ink, true).apply { setPadding(0, dp(10), 0, dp(4) ) })
         box.addView(year); box.addView(km); box.addView(plate)
+        box.addView(label("بیمه (مدت اعتبار یک سال)", 13f, ink, true).apply { setPadding(0, dp(12), 0, dp(4) ) })
+        box.addView(bodyIns); box.addView(thirdIns)
+        box.addView(label("یادآوری انقضای بیمه در داشبورد نمایش داده می‌شود.", 11f, muted, false).apply { setPadding(0, dp(6), 0, 0) })
         AlertDialog.Builder(this).setTitle("افزودن خودرو به MYCAR").setView(box).setNegativeButton("انصراف", null).setPositiveButton("افزودن") { _, _ ->
             val brand = brandSpinner.selectedItem?.toString() ?: "سایر"
             val model = modelSpinner.selectedItem?.toString() ?: "خودروی دیگر"
@@ -347,17 +388,19 @@ class MainActivity : Activity() {
             val obj = JSONObject().put("id", UUID.randomUUID().toString()).put("brand", brand).put("model", model)
                 .put("year", normalizeDigits(year.text.toString())).put("km", normalizeDigits(km.text.toString()).filter { it.isDigit() }.ifBlank { "0" })
                 .put("plate", plate.text.toString()).put("image", selected?.image ?: "").put("created", System.currentTimeMillis())
+                .put("bodyInsuranceExpiry", bodyIns.text.toString().trim())
+                .put("thirdPartyInsuranceExpiry", thirdIns.text.toString().trim())
             save("cars", obj)
-            if (prefs.getString("active_car", "").isNullOrBlank()) prefs.edit().putString("active_car", obj.optString("id")).apply()
+            if (prefs.getString("selected_car", "").isNullOrBlank()) prefs.edit().putString("selected_car", obj.optString("id")).apply()
             tab = "خودروها"; showApp()
         }.show()
     }
 
-    private fun chooseActiveCar() {
+    private fun chooseCarProfile() {
         val cars = load("cars")
         if (cars.isEmpty()) return addVehicle()
-        AlertDialog.Builder(this).setTitle("انتخاب خودرو").setItems(cars.map { it.optString("model") }.toTypedArray()) { _, which ->
-            prefs.edit().putString("active_car", cars[which].optString("id")).apply(); showApp()
+        AlertDialog.Builder(this).setTitle("انتخاب پروفایل خودرو").setItems(cars.map { it.optString("model") }.toTypedArray()) { _, which ->
+            prefs.edit().putString("selected_car", cars[which].optString("id")).apply(); showApp()
         }.show()
     }
 
@@ -365,13 +408,13 @@ class MainActivity : Activity() {
         val id = car.optString("id")
         saveList("cars", load("cars").filterNot { it.optString("id") == id })
         listOf("history", "expenses", "services").forEach { key -> saveList(key, load(key).filterNot { it.optString("vehicleId") == id }) }
-        if (prefs.getString("active_car", "") == id) prefs.edit().putString("active_car", load("cars").firstOrNull()?.optString("id") ?: "").apply()
+        if (prefs.getString("selected_car", "") == id) prefs.edit().putString("selected_car", load("cars").firstOrNull()?.optString("id") ?: "").apply()
     }
 
     private fun selectedCar(): JSONObject? {
         val cars = load("cars")
-        val id = prefs.getString("active_car", "") ?: ""
-        return cars.firstOrNull { it.optString("id") == id } ?: cars.firstOrNull()?.also { prefs.edit().putString("active_car", it.optString("id")).apply() }
+        val id = prefs.getString("selected_car", "") ?: ""
+        return cars.firstOrNull { it.optString("id") == id } ?: cars.firstOrNull()?.also { prefs.edit().putString("selected_car", it.optString("id")).apply() }
     }
 
     private fun maintenancePlanFor(car: JSONObject): Pair<String, List<MaintenanceItem>> {
@@ -705,7 +748,10 @@ class MainActivity : Activity() {
     private fun field(hintText: String, initial: String = "", numeric: Boolean = false): EditText = EditText(this).apply {
         hint = hintText; setText(initial); textSize = 14f; isSingleLine = true; setTextColor(ink); setHintTextColor(muted); layoutDirection = View.LAYOUT_DIRECTION_RTL
         if (numeric) inputType = InputType.TYPE_CLASS_NUMBER
-        setPadding(dp(10), dp(5), dp(10), dp(5))
+        setPadding(dp(14), dp(12), dp(14), dp(12))
+        background = rounded(Color.rgb(248, 250, 251), 12)
+        // subtle border via padding look
+        setPadding(dp(14), dp(12), dp(14), dp(12))
     }
     private fun rounded(color: Int, radius: Int) = GradientDrawable().apply { setColor(color); cornerRadius = dp(radius).toFloat() }
     private fun money(value: Long): String = NumberFormat.getNumberInstance(Locale("fa", "IR")).format(value)
