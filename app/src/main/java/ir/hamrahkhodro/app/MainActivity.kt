@@ -2,24 +2,29 @@ package ir.hamrahkhodro.app
 
 import android.app.Activity
 import android.app.AlertDialog
-import android.graphics.BitmapFactory
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.LinearGradient
+import android.graphics.Shader
+import android.graphics.RectF
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.text.InputType
+import android.text.InputFilter
+import android.os.Handler
+import android.os.Looper
 import android.view.Gravity
 import android.view.View
-import android.view.ViewGroup
 import android.widget.*
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.File
-import java.net.URL
 import java.text.NumberFormat
 import java.util.Locale
 import java.util.UUID
-import kotlin.concurrent.thread
 
 class MainActivity : Activity() {
     private val prefs by lazy { getSharedPreferences("mycar_store", MODE_PRIVATE) }
@@ -32,65 +37,68 @@ class MainActivity : Activity() {
     private lateinit var root: LinearLayout
     private lateinit var content: LinearLayout
     private var tab = "خانه"
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var otpRunnable: Runnable? = null
 
     data class CarModel(val brand: String, val name: String, val image: String = "")
+    data class MaintenanceItem(val title: String, val intervalKm: Int, val intervalMonths: Int, val detail: String)
     private val carModels = listOf(
-        CarModel("ایران‌خودرو", "پژو ۲۰۷ دنده‌ای", "https://commons.wikimedia.org/wiki/Special:FilePath/Peugeot_207i.jpg"),
-        CarModel("ایران‌خودرو", "پژو ۲۰۷ اتوماتیک", "https://commons.wikimedia.org/wiki/Special:FilePath/Peugeot_207i.jpg"),
-        CarModel("ایران‌خودرو", "پژو ۲۰۶ تیپ ۲", "https://commons.wikimedia.org/wiki/Special:FilePath/Peugeot_207i.jpg"),
-        CarModel("ایران‌خودرو", "پژو پارس", "https://commons.wikimedia.org/wiki/Special:FilePath/Peugeot_207i.jpg"),
-        CarModel("ایران‌خودرو", "دنا پلاس", "https://commons.wikimedia.org/wiki/Special:FilePath/IKCO_Tara_AT_01_2024-05-02.jpg"),
-        CarModel("ایران‌خودرو", "تارا دنده‌ای", "https://commons.wikimedia.org/wiki/Special:FilePath/IKCO_Tara_AT_01_2024-05-02.jpg"),
-        CarModel("ایران‌خودرو", "تارا اتوماتیک", "https://commons.wikimedia.org/wiki/Special:FilePath/IKCO_Tara_AT_01_2024-05-02.jpg"),
-        CarModel("ایران‌خودرو", "سورن پلاس", "https://commons.wikimedia.org/wiki/Special:FilePath/IKCO_Tara_AT_01_2024-05-02.jpg"),
-        CarModel("ایران‌خودرو", "رانا پلاس", "https://commons.wikimedia.org/wiki/Special:FilePath/Peugeot_207i.jpg"),
-        CarModel("ایران‌خودرو", "سمند LX", "https://commons.wikimedia.org/wiki/Special:FilePath/IKCO_Tara_AT_01_2024-05-02.jpg"),
-        CarModel("ایران‌خودرو", "پژو ۴۰۵", "https://commons.wikimedia.org/wiki/Special:FilePath/Peugeot_207i.jpg"),
-        CarModel("ایران‌خودرو", "پژو پارس ELX", "https://commons.wikimedia.org/wiki/Special:FilePath/Peugeot_207i.jpg"),
-        CarModel("ایران‌خودرو", "آریسان ۲", "https://commons.wikimedia.org/wiki/Special:FilePath/IKCO_Tara_AT_01_2024-05-02.jpg"),
-        CarModel("ایران‌خودرو", "ری‌را", "https://commons.wikimedia.org/wiki/Special:FilePath/IKCO_Tara_AT_01_2024-05-02.jpg"),
-        CarModel("ایران‌خودرو", "هایما S5", "https://commons.wikimedia.org/wiki/Special:FilePath/IKCO_Tara_AT_01_2024-05-02.jpg"),
-        CarModel("ایران‌خودرو", "هایما S7", "https://commons.wikimedia.org/wiki/Special:FilePath/IKCO_Tara_AT_01_2024-05-02.jpg"),
-        CarModel("سایپا", "شاهین", "https://commons.wikimedia.org/wiki/Special:FilePath/Saipa_Shahin_01_2023-07-03.jpg"),
-        CarModel("سایپا", "کوییک", "https://commons.wikimedia.org/wiki/Special:FilePath/Saipa_Shahin_01_2023-07-03.jpg"),
-        CarModel("سایپا", "کوییک S", "https://commons.wikimedia.org/wiki/Special:FilePath/Saipa_Shahin_01_2023-07-03.jpg"),
-        CarModel("سایپا", "ساینا S", "https://commons.wikimedia.org/wiki/Special:FilePath/Saipa_Shahin_01_2023-07-03.jpg"),
-        CarModel("سایپا", "اطلس", "https://commons.wikimedia.org/wiki/Special:FilePath/Saipa_Shahin_01_2023-07-03.jpg"),
-        CarModel("سایپا", "تیبا", "https://commons.wikimedia.org/wiki/Special:FilePath/Saipa_Shahin_01_2023-07-03.jpg"),
-        CarModel("سایپا", "تیبا ۲", "https://commons.wikimedia.org/wiki/Special:FilePath/Saipa_Shahin_01_2023-07-03.jpg"),
-        CarModel("سایپا", "پراید ۱۳۱", "https://commons.wikimedia.org/wiki/Special:FilePath/Saipa_Shahin_01_2023-07-03.jpg"),
-        CarModel("سایپا", "پراید ۱۱۱", "https://commons.wikimedia.org/wiki/Special:FilePath/Saipa_Shahin_01_2023-07-03.jpg"),
-        CarModel("سایپا", "سهند", "https://commons.wikimedia.org/wiki/Special:FilePath/Saipa_Shahin_01_2023-07-03.jpg"),
-        CarModel("سایپا", "سایپا ۱۵۱", "https://commons.wikimedia.org/wiki/Special:FilePath/Saipa_Shahin_01_2023-07-03.jpg"),
-        CarModel("MVM", "X22", "https://commons.wikimedia.org/wiki/Special:FilePath/MVM_X22_01_2024-07-31.jpg"),
-        CarModel("MVM", "X22 Pro", "https://commons.wikimedia.org/wiki/Special:FilePath/MVM_X22_01_2024-07-31.jpg"),
-        CarModel("MVM", "X33", "https://commons.wikimedia.org/wiki/Special:FilePath/MVM_X22_01_2024-07-31.jpg"),
-        CarModel("MVM", "X55 Pro", "https://commons.wikimedia.org/wiki/Special:FilePath/MVM_X22_01_2024-07-31.jpg"),
-        CarModel("MVM", "315", "https://commons.wikimedia.org/wiki/Special:FilePath/MVM_X22_01_2024-07-31.jpg"),
-        CarModel("MVM", "X33 Cross", "https://commons.wikimedia.org/wiki/Special:FilePath/MVM_X22_01_2024-07-31.jpg"),
-        CarModel("MVM", "530 / 550", "https://commons.wikimedia.org/wiki/Special:FilePath/MVM_X22_01_2024-07-31.jpg"),
-        CarModel("فونیکس", "Tiggo 7 Pro", "https://commons.wikimedia.org/wiki/Special:FilePath/MVM_X22_01_2024-07-31.jpg"),
-        CarModel("فونیکس", "Arrizo 6 Pro", "https://commons.wikimedia.org/wiki/Special:FilePath/MVM_X22_01_2024-07-31.jpg"),
-        CarModel("فونیکس", "FX", "https://commons.wikimedia.org/wiki/Special:FilePath/MVM_X22_01_2024-07-31.jpg"),
-        CarModel("فونیکس", "Tiggo 8 Pro", "https://commons.wikimedia.org/wiki/Special:FilePath/MVM_X22_01_2024-07-31.jpg"),
-        CarModel("چری", "Arrizo 5", "https://commons.wikimedia.org/wiki/Special:FilePath/MVM_X22_01_2024-07-31.jpg"),
-        CarModel("بهمن", "دیگنیتی", "https://commons.wikimedia.org/wiki/Special:FilePath/MVM_X22_01_2024-07-31.jpg"),
-        CarModel("بهمن", "فیدلیتی", "https://commons.wikimedia.org/wiki/Special:FilePath/MVM_X22_01_2024-07-31.jpg"),
-        CarModel("بهمن", "رسپکت", "https://commons.wikimedia.org/wiki/Special:FilePath/MVM_X22_01_2024-07-31.jpg"),
-        CarModel("بهمن", "مزدا ۳", "https://commons.wikimedia.org/wiki/Special:FilePath/MVM_X22_01_2024-07-31.jpg"),
-        CarModel("کرمان موتور", "J4", "https://commons.wikimedia.org/wiki/Special:FilePath/MVM_X22_01_2024-07-31.jpg"),
-        CarModel("کرمان موتور", "KMC T8", "https://commons.wikimedia.org/wiki/Special:FilePath/MVM_X22_01_2024-07-31.jpg"),
-        CarModel("کرمان موتور", "KMC J7", "https://commons.wikimedia.org/wiki/Special:FilePath/MVM_X22_01_2024-07-31.jpg"),
-        CarModel("کرمان موتور", "JAC S3", "https://commons.wikimedia.org/wiki/Special:FilePath/MVM_X22_01_2024-07-31.jpg"),
-        CarModel("کرمان موتور", "JAC S5", "https://commons.wikimedia.org/wiki/Special:FilePath/MVM_X22_01_2024-07-31.jpg"),
-        CarModel("پارس‌خودرو", "رنو تندر ۹۰", "https://commons.wikimedia.org/wiki/Special:FilePath/Peugeot_207i.jpg"),
-        CarModel("پارس‌خودرو", "رنو ساندرو", "https://commons.wikimedia.org/wiki/Special:FilePath/Peugeot_207i.jpg"),
-        CarModel("رنو", "داستر", "https://commons.wikimedia.org/wiki/Special:FilePath/Peugeot_207i.jpg"),
-        CarModel("تویوتا", "کرولا", "https://commons.wikimedia.org/wiki/Special:FilePath/IKCO_Tara_AT_01_2024-05-02.jpg"),
-        CarModel("تویوتا", "کمری", "https://commons.wikimedia.org/wiki/Special:FilePath/IKCO_Tara_AT_01_2024-05-02.jpg"),
-        CarModel("هیوندای", "توسان", "https://commons.wikimedia.org/wiki/Special:FilePath/MVM_X22_01_2024-07-31.jpg"),
-        CarModel("کیا", "سراتو", "https://commons.wikimedia.org/wiki/Special:FilePath/IKCO_Tara_AT_01_2024-05-02.jpg"),
-        CarModel("پارس‌خودرو", "کوییک (مونتاژ/عرضه سایپا)", "https://commons.wikimedia.org/wiki/Special:FilePath/Saipa_Shahin_01_2023-07-03.jpg"),
+        CarModel("ایران‌خودرو", "پژو ۲۰۷ دنده‌ای"),
+        CarModel("ایران‌خودرو", "پژو ۲۰۷ اتوماتیک"),
+        CarModel("ایران‌خودرو", "پژو ۲۰۶ تیپ ۲"),
+        CarModel("ایران‌خودرو", "پژو پارس"),
+        CarModel("ایران‌خودرو", "دنا پلاس"),
+        CarModel("ایران‌خودرو", "تارا دنده‌ای"),
+        CarModel("ایران‌خودرو", "تارا اتوماتیک"),
+        CarModel("ایران‌خودرو", "سورن پلاس"),
+        CarModel("ایران‌خودرو", "رانا پلاس"),
+        CarModel("ایران‌خودرو", "سمند LX"),
+        CarModel("ایران‌خودرو", "پژو ۴۰۵"),
+        CarModel("ایران‌خودرو", "پژو پارس ELX"),
+        CarModel("ایران‌خودرو", "آریسان ۲"),
+        CarModel("ایران‌خودرو", "ری‌را"),
+        CarModel("ایران‌خودرو", "هایما S5"),
+        CarModel("ایران‌خودرو", "هایما S7"),
+        CarModel("سایپا", "شاهین"),
+        CarModel("سایپا", "کوییک"),
+        CarModel("سایپا", "کوییک S"),
+        CarModel("سایپا", "ساینا S"),
+        CarModel("سایپا", "اطلس"),
+        CarModel("سایپا", "تیبا"),
+        CarModel("سایپا", "تیبا ۲"),
+        CarModel("سایپا", "پراید ۱۳۱"),
+        CarModel("سایپا", "پراید ۱۱۱"),
+        CarModel("سایپا", "سهند"),
+        CarModel("سایپا", "سایپا ۱۵۱"),
+        CarModel("MVM", "X22"),
+        CarModel("MVM", "X22 Pro"),
+        CarModel("MVM", "X33"),
+        CarModel("MVM", "X55 Pro"),
+        CarModel("MVM", "315"),
+        CarModel("MVM", "X33 Cross"),
+        CarModel("MVM", "530 / 550"),
+        CarModel("فونیکس", "Tiggo 7 Pro"),
+        CarModel("فونیکس", "Arrizo 6 Pro"),
+        CarModel("فونیکس", "FX"),
+        CarModel("فونیکس", "Tiggo 8 Pro"),
+        CarModel("چری", "Arrizo 5"),
+        CarModel("بهمن", "دیگنیتی"),
+        CarModel("بهمن", "فیدلیتی"),
+        CarModel("بهمن", "رسپکت"),
+        CarModel("بهمن", "مزدا ۳"),
+        CarModel("کرمان موتور", "J4"),
+        CarModel("کرمان موتور", "KMC T8"),
+        CarModel("کرمان موتور", "KMC J7"),
+        CarModel("کرمان موتور", "JAC S3"),
+        CarModel("کرمان موتور", "JAC S5"),
+        CarModel("پارس‌خودرو", "رنو تندر ۹۰"),
+        CarModel("پارس‌خودرو", "رنو ساندرو"),
+        CarModel("رنو", "داستر"),
+        CarModel("تویوتا", "کرولا"),
+        CarModel("تویوتا", "کمری"),
+        CarModel("هیوندای", "توسان"),
+        CarModel("کیا", "سراتو"),
+        CarModel("پارس‌خودرو", "کوییک (مونتاژ/عرضه سایپا)"),
         CarModel("سایر", "خودروی دیگر / ورود دستی")
     )
 
@@ -122,7 +130,7 @@ class MainActivity : Activity() {
         card(body) {
             addView(label("ورود یا ثبت‌نام", 20f, ink, true))
             addView(label("برای شروع، شماره موبایل ایران را وارد کن.", 13f, muted, false).apply { setPadding(0, dp(8), 0, dp(16)) })
-            val phone = field("شماره موبایل، مثل 09123456789", "", true).apply { inputType = InputType.TYPE_CLASS_PHONE }
+            val phone = field("شماره موبایل، مثل 09123456789", "", true).apply { inputType = InputType.TYPE_CLASS_NUMBER; filters = arrayOf(InputFilter.LengthFilter(11)); textDirection = View.TEXT_DIRECTION_LTR; gravity = Gravity.CENTER }
             addView(phone)
             actionButtonIn(this, "دریافت کد تأیید", true) {
                 val number = normalizeDigits(phone.text.toString()).filter { it.isDigit() }
@@ -135,22 +143,72 @@ class MainActivity : Activity() {
     }
 
     private fun showOtp(phone: String) {
+        otpRunnable?.let { mainHandler.removeCallbacks(it) }
         val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(22), dp(8), dp(22), 0) }
         box.addView(label("کد تأیید برای $phone", 15f, ink, true).apply { setPadding(0, 0, 0, dp(8)) })
-        val otp = field("کد ۵ رقمی", "", true).apply { inputType = InputType.TYPE_CLASS_NUMBER; gravity = Gravity.CENTER; textSize = 22f }
+        val otp = field("کد ۵ رقمی", "", true).apply {
+            inputType = InputType.TYPE_CLASS_NUMBER
+            filters = arrayOf(InputFilter.LengthFilter(5))
+            gravity = Gravity.CENTER
+            textDirection = View.TEXT_DIRECTION_LTR
+            textSize = 22f
+        }
         box.addView(otp)
-        AlertDialog.Builder(this).setTitle("تأیید شماره موبایل").setView(box).setCancelable(false)
-            .setPositiveButton("تأیید", null).setNegativeButton("بازگشت") { _, _ -> showPhoneLogin() }.create().also { dialog ->
-                dialog.setOnShowListener {
-                    dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                        if (normalizeDigits(otp.text.toString()).filter { it.isDigit() } == "12345") {
-                            prefs.edit().putBoolean("logged_in", true).putString("phone", phone).apply()
-                            dialog.dismiss(); showApp()
-                        } else toast("کد واردشده صحیح نیست؛ کد تست 12345 است")
-                    }
+        val timerLabel = label("برای وارد کردن کد ۰۲:۰۰ فرصت داری.", 13f, muted, false).apply { gravity = Gravity.CENTER; setPadding(0, dp(10), 0, dp(4)) }
+        box.addView(timerLabel)
+        val resend = TextView(this).apply {
+            text = "ارسال مجدد کد"
+            textSize = 13f
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            setTextColor(muted)
+            setPadding(dp(10), dp(10), dp(10), dp(8))
+            isEnabled = false
+        }
+        box.addView(resend)
+        val dialog = AlertDialog.Builder(this).setTitle("تأیید شماره موبایل").setView(box).setCancelable(false)
+            .setPositiveButton("تأیید", null).setNegativeButton("بازگشت") { _, _ -> otpRunnable?.let { mainHandler.removeCallbacks(it) }; showPhoneLogin() }.create()
+        fun startCountdown() {
+            otpRunnable?.let { mainHandler.removeCallbacks(it) }
+            resend.isEnabled = false
+            resend.setTextColor(muted)
+            val endAt = System.currentTimeMillis() + 120_000L
+            val runner = object : Runnable {
+                override fun run() {
+                    val remaining = (endAt - System.currentTimeMillis()).coerceAtLeast(0L)
+                    val seconds = (remaining / 1000L).toInt()
+                    timerLabel.text = if (remaining > 0L) "زمان باقی‌مانده: %02d:%02d".format(seconds / 60, seconds % 60) else "مهلت کد تمام شد؛ می‌توانی کد جدید بگیری."
+                    if (remaining > 0L && dialog.isShowing) mainHandler.postDelayed(this, 1000L)
+                    else if (dialog.isShowing) { resend.isEnabled = true; resend.setTextColor(teal) }
                 }
-                dialog.show()
             }
+            otpRunnable = runner
+            runner.run()
+        }
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val entered = normalizeDigits(otp.text.toString()).filter { it.isDigit() }
+                if (System.currentTimeMillis() > (prefs.getLong("otp_expires_at", 0L))) {
+                    toast("مهلت کد تمام شده؛ کد جدید بگیر")
+                } else if (entered == "12345") {
+                    otpRunnable?.let { mainHandler.removeCallbacks(it) }
+                    prefs.edit().putBoolean("logged_in", true).putString("phone", phone).apply()
+                    dialog.dismiss(); showApp()
+                } else toast("کد واردشده صحیح نیست؛ کد تست 12345 است")
+            }
+            resend.setOnClickListener {
+                if (resend.isEnabled) {
+                    prefs.edit().putLong("otp_expires_at", System.currentTimeMillis() + 120_000L).apply()
+                    otp.setText("")
+                    toast("کد آزمایشی جدید ارسال شد: 12345")
+                    startCountdown()
+                }
+            }
+            prefs.edit().putLong("otp_expires_at", System.currentTimeMillis() + 120_000L).apply()
+            startCountdown()
+        }
+        dialog.setOnDismissListener { otpRunnable?.let { mainHandler.removeCallbacks(it) }; otpRunnable = null }
+        dialog.show()
     }
 
     private fun showApp() {
@@ -209,7 +267,7 @@ class MainActivity : Activity() {
                 val line = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
                 val img = ImageView(this@MainActivity).apply { scaleType = ImageView.ScaleType.CENTER_CROP; background = rounded(Color.rgb(236, 241, 243), 12) }
                 line.addView(img, LinearLayout.LayoutParams(dp(112), dp(78)))
-                loadCarImage(selected.optString("image"), img)
+                setCarIllustration(img, selected.optString("model"), selected.optString("brand"))
                 val info = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(12), 0, 0, 0); layoutParams = LinearLayout.LayoutParams(0, -2, 1f) }
                 info.addView(label(selected.optString("model"), 17f, ink, true))
                 info.addView(label("${selected.optString("brand")} • ${selected.optString("year", "سال نامشخص")}", 12f, muted, false).apply { setPadding(0, dp(4), 0, 0) })
@@ -224,6 +282,13 @@ class MainActivity : Activity() {
             val metrics = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
             metric(metrics, "سوابق", histories.size.toString()); metric(metrics, "هزینه کل", moneyShort(total)); metric(metrics, "خودروها", cars.size.toString())
             content.addView(metrics)
+            sectionTitle(content, "سرویس‌های پیش‌رو")
+            val upcoming = load("services").filter { it.optString("vehicleId") == id }.sortedBy { normalizeDigits(it.optString("km", "999999999")).filter { ch -> ch.isDigit() }.toLongOrNull() ?: Long.MAX_VALUE }.take(2)
+            if (upcoming.isEmpty()) {
+                emptyState(content, "سرویسی در تقویم نیست", "برنامه پیشنهادی خودرو را باز کن تا یادآوری‌های اولیه اضافه شوند.")
+            } else {
+                upcoming.forEach { itemCard(content, it, "service") }
+            }
             sectionTitle(content, "دسترسی سریع")
             actionButton("＋ ثبت سرویس انجام‌شده", true) { addHistory() }
             actionButton("＋ ثبت هزینه", false) { addExpense() }
@@ -244,7 +309,7 @@ class MainActivity : Activity() {
             card(content) {
                 val row = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
                 val image = ImageView(this@MainActivity).apply { scaleType = ImageView.ScaleType.CENTER_CROP; background = rounded(Color.rgb(236, 241, 243), 12) }
-                row.addView(image, LinearLayout.LayoutParams(dp(108), dp(82))); loadCarImage(car.optString("image"), image)
+                row.addView(image, LinearLayout.LayoutParams(dp(108), dp(82))); setCarIllustration(image, car.optString("model"), car.optString("brand"))
                 val info = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(12), 0, 0, 0); layoutParams = LinearLayout.LayoutParams(0, -2, 1f) }
                 info.addView(label(car.optString("model"), 16f, ink, true))
                 info.addView(label("${car.optString("brand")} • ${car.optString("year", "سال نامشخص")}", 12f, muted, false).apply { setPadding(0, dp(4), 0, 0) })
@@ -309,32 +374,116 @@ class MainActivity : Activity() {
         return cars.firstOrNull { it.optString("id") == id } ?: cars.firstOrNull()?.also { prefs.edit().putString("active_car", it.optString("id")).apply() }
     }
 
-    private fun showMaintenancePlan(car: JSONObject) {
+    private fun maintenancePlanFor(car: JSONObject): Pair<String, List<MaintenanceItem>> {
         val model = car.optString("model")
-        val is207 = model.contains("۲۰۷") || model.contains("207")
-        val title = if (is207) "برنامه پیشنهادی پژو ۲۰۷" else "برنامه پیشنهادی ${model}"
-        val plan = if (is207) listOf(
-            "هر ۱۰٬۰۰۰ کیلومتر یا ۱ سال (هرکدام زودتر): سرویس دوره‌ای و تعویض روغن موتور و فیلتر روغن",
-            "در بازدیدهای دوره‌ای: بررسی فیلتر هوا و تعویض طبق وضعیت و دفترچه خودرو",
-            "در بازدیدهای دوره‌ای: بررسی ترمز، لاستیک‌ها، مایعات، نشتی‌ها و وضعیت باتری",
-            "شمع، تسمه‌ها، مایع خنک‌کننده و روغن گیربکس: مطابق جدول دقیق تیپ موتور و دفترچه همان خودرو"
-        ) else listOf(
-            "بررسی دفترچه همان تیپ خودرو؛ برنامه سازنده ممکن است با موتور و سال ساخت تفاوت داشته باشد.",
-            "برای نسخه راهنمای اولیه: بازدید ایمنی، لاستیک، ترمز، نشتی‌ها و سطح مایعات به‌صورت دوره‌ای.",
-            "روغن و فیلترها را فقط بر اساس بازه معتبر همان مدل و شرایط کارکرد ثبت کن.",
-            "برای قطعات مصرفی، از بازه‌های عمومی به‌عنوان جایگزین دفترچه سازنده استفاده نکن."
-        )
-        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(8), dp(20), 0) }
+        val normalized = normalizeDigits(model).lowercase(Locale.ROOT)
+        val is207 = normalized.contains("207")
+        val is206 = normalized.contains("206")
+        val isTiba = model.contains("تیبا")
+        val isShahin = model.contains("شاهین")
+        val isMvm = car.optString("brand").contains("MVM") || car.optString("brand").contains("فونیکس") || car.optString("brand").contains("چری")
+        val isIranKhodro = car.optString("brand").contains("ایران") || model.contains("دنا") || model.contains("تارا") || model.contains("سورن") || model.contains("سمند") || model.contains("رانا") || model.contains("پارس")
+        val title: String
+        val items: List<MaintenanceItem>
+        when {
+            is207 -> {
+                title = "برنامه سرویس پژو ۲۰۷"
+                items = listOf(
+                    MaintenanceItem("سرویس کامل و بازدید ایمنی", 10000, 12, "بازدید نشتی‌ها، ترمز، تایرها، فرمان، تعلیق، چراغ‌ها و سطح مایعات."),
+                    MaintenanceItem("تعویض روغن موتور و فیلتر روغن", 10000, 12, "در جدول سرویس ۲۰۷ با موتور TU5/TU5P هر ۱۰٬۰۰۰ کیلومتر یا یک سال، هرکدام زودتر برسد."),
+                    MaintenanceItem("فیلتر هوای موتور", 40000, 24, "بازه تعویض درج‌شده در جدول ۲۰۷؛ در گردوغبار زودتر بازدید شود."),
+                    MaintenanceItem("تسمه تایم و تسمه آلترناتور", 80000, 36, "بازه اعلام‌شده ۸۰٬۰۰۰ کیلومتر یا ۳ سال؛ سابقه تعویض و وضعیت تسمه اهمیت دارد."),
+                    MaintenanceItem("مایع خنک‌کننده", 40000, 36, "تعویض مایع خنک‌کننده طبق برنامه ۳ ساله؛ بازدید سطح و نشتی در سرویس‌ها."),
+                    MaintenanceItem("فیلتر کابین", 20000, 12, "بازدید در سرویس‌های دوره‌ای و تعویض زودتر در آلودگی و گردوغبار."),
+                    MaintenanceItem("ترمز، تایرها و تعلیق", 10000, 12, "بازدید وضعیت لنت و دیسک، فشار و سایش تایر، اتصالات و کمک‌فنرها.")
+                )
+            }
+            isTiba -> {
+                title = "برنامه سرویس تیبا"
+                items = listOf(
+                    MaintenanceItem("سرویس دوره‌ای و تعویض روغن و فیلتر", 10000, 12, "جدول سرویس تیبا دوره‌های کیلومتری ۱۰٬۰۰۰ را مبنا قرار می‌دهد؛ زمان و کیلومتر هر دو مهم‌اند."),
+                    MaintenanceItem("فیلتر هوا و فیلتر کابین", 10000, 12, "در هر سرویس بازدید؛ تعویض بر اساس برنامه و آلودگی محیط."),
+                    MaintenanceItem("مایع خنک‌کننده", 40000, 24, "تعویض هر ۴۰٬۰۰۰ کیلومتر یا ۲۴ ماه."),
+                    MaintenanceItem("ترمزها، تایرها و تعلیق", 10000, 12, "بازدید در سرویس دوره‌ای؛ لنت و قطعات فرسایشی بر اساس وضعیت واقعی تعویض شوند."),
+                    MaintenanceItem("فیلتر سوخت", 20000, 24, "در جدول نگهداری تیبا برای این قلم دوره‌های تعویض مشخص شده؛ سابقه سرویس ثبت شود."),
+                    MaintenanceItem("روغن ترمز و سیستم فرمان", 10000, 12, "سطح، نشتی و عملکرد بررسی شود؛ زمان تعویض بر اساس وضعیت و برنامه نگهداری خودرو.")
+                )
+            }
+            isShahin -> {
+                title = "برنامه سرویس سایپا شاهین"
+                items = listOf(
+                    MaintenanceItem("سرویس کامل و روغن موتور و فیلتر", 10000, 12, "بازه پایه منتشرشده برای برخی تیپ‌ها ۱۰٬۰۰۰ کیلومتر یا ۱۲ ماه است؛ تیپ و سال تولید در تعیین برنامه دقیق مؤثر است."),
+                    MaintenanceItem("فیلتر هوای موتور", 10000, 12, "بازدید در هر سرویس و تعویض در موعد یا زودتر در شرایط گردوغبار."),
+                    MaintenanceItem("مایع خنک‌کننده", 60000, 36, "بازه پیشنهادی منتشرشده ۶۰٬۰۰۰ کیلومتر یا ۳۶ ماه؛ سطح و نشتی در هر سرویس بررسی شود."),
+                    MaintenanceItem("ترمز، تایرها و تعلیق", 10000, 12, "بازدید دوره‌ای؛ تعویض قطعات فرسایشی بر اساس اندازه‌گیری و وضعیت واقعی."),
+                    MaintenanceItem("روغن گیربکس", 40000, 24, "برنامه با نوع گیربکس دستی یا اتوماتیک و تیپ خودرو متفاوت است؛ این مورد را در پرونده سرویس ثبت کن و از روغن نامتناسب استفاده نکن.")
+                )
+            }
+            isMvm -> {
+                title = "برنامه نگهداری ${model}"
+                items = listOf(
+                    MaintenanceItem("روغن موتور و فیلتر روغن", 7500, 6, "برای استفاده شهری، راهنماهای تخصصی X22 بازه حدود ۵ تا ۷٫۵ هزار کیلومتر را پیشنهاد می‌کنند؛ مشخصات موتور و نوع روغن مهم است."),
+                    MaintenanceItem("فیلتر هوا و فیلتر کابین", 10000, 12, "بازدید در هر سرویس؛ در محیط آلوده معمولاً زودتر به تعویض نیاز دارند."),
+                    MaintenanceItem("شمع موتور", 25000, 24, "بازه تخمینی برای شمع معمولی؛ نوع شمع و موتور می‌تواند بازه را تغییر دهد."),
+                    MaintenanceItem("ترمزها، تایرها و تعلیق", 10000, 12, "بازدید وضعیت لنت، دیسک، تایر، اتصالات و کمک‌فنرها."),
+                    MaintenanceItem("روغن گیربکس", 40000, 24, "موعد دقیق به مدل و گیربکس دستی یا CVT/اتوماتیک وابسته است؛ از مشخصات یک گیربکس برای دیگری استفاده نکن."),
+                    MaintenanceItem("سیستم خنک‌کاری و تسمه‌ها", 10000, 12, "بازدید سطح مایع، نشتی و وضعیت تسمه‌ها در هر سرویس؛ تعویض قطعات حساس بر اساس نسخه دقیق خودرو.")
+                )
+            }
+            isIranKhodro || is206 -> {
+                title = "برنامه سرویس ${model}"
+                items = listOf(
+                    MaintenanceItem("سرویس دوره‌ای و بازدید ایمنی", 10000, 12, "در برنامه منتشرشده محصولات رایج ایران‌خودرو، بازدید دوره‌ای هر ۱۰٬۰۰۰ کیلومتر یا یک سال انجام می‌شود."),
+                    MaintenanceItem("تعویض روغن موتور و فیلتر روغن", 10000, 12, "موعد کیلومتری یا زمانی هرکدام زودتر برسد؛ در استفاده سنگین، فاصله سرویس کوتاه‌تر می‌شود."),
+                    MaintenanceItem("فیلتر هوا و فیلتر کابین", 10000, 12, "بازدید دوره‌ای و تعویض بر اساس میزان آلودگی و برنامه سرویس مدل."),
+                    MaintenanceItem("ترمز، تایرها، فرمان و تعلیق", 10000, 12, "بازدید وضعیت و نشتی‌ها در هر سرویس دوره‌ای."),
+                    MaintenanceItem("تسمه‌ها و سیستم خنک‌کاری", 20000, 12, "بازدید و ثبت سابقه؛ موعد تعویض تسمه تایم باید متناسب با موتور دقیق خودرو اعمال شود."),
+                    MaintenanceItem("روغن گیربکس و مایعات", 20000, 24, "بازدید سطح، نشتی و وضعیت؛ موعد تعویض به موتور و نوع گیربکس وابسته است.")
+                )
+            }
+            else -> {
+                title = "برنامه پایه نگهداری ${model}"
+                items = listOf(
+                    MaintenanceItem("سرویس دوره‌ای و روغن موتور و فیلتر", 10000, 12, "برنامه پایه برای ثبت و یادآوری؛ بازه روغن در برخی موتورهای توربو یا خودروهای مونتاژی کوتاه‌تر است."),
+                    MaintenanceItem("فیلتر هوا و فیلتر کابین", 10000, 12, "بازدید در هر سرویس و تعویض با توجه به آلودگی محیط."),
+                    MaintenanceItem("ترمزها، تایرها، فرمان و تعلیق", 10000, 12, "بازدید ایمنی دوره‌ای؛ تعویض قطعات مصرفی بر اساس وضعیت واقعی."),
+                    MaintenanceItem("مایع خنک‌کننده و روغن ترمز", 20000, 24, "کنترل سطح و نشتی؛ زمان تعویض به نوع مایع و مشخصات خودرو وابسته است."),
+                    MaintenanceItem("شمع، تسمه‌ها و روغن گیربکس", 20000, 24, "در برنامه پایه به‌عنوان مورد قابل بررسی ثبت می‌شود؛ موعد دقیق به موتور و نوع گیربکس بستگی دارد.")
+                )
+            }
+        }
+        return title to items
+    }
+
+    private fun showMaintenancePlan(car: JSONObject) {
+        val (title, plan) = maintenancePlanFor(car)
+        val currentKm = normalizeDigits(car.optString("km", "0")).filter { it.isDigit() }.toIntOrNull() ?: 0
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(8), dp(20), dp(4)) }
         box.addView(label("${car.optString("brand")} • ${car.optString("model")}", 14f, teal, true))
-        plan.forEachIndexed { i, item -> box.addView(label("${i + 1}. $item", 13f, ink, false).apply { setPadding(0, dp(10), 0, dp(2)) }) }
-        box.addView(label("منبع راهنمای ۲۰۷: جدول سرویس‌های دوره‌ای منتشرشده برای ۲۰۷i موتور TU5/TU5P و محتوای راهنمای سرویس ایران‌خودرو. برنامه دقیق به تیپ و سال ساخت وابسته است. این فهرست راهنمای اولیه است؛ دفترچه مالک خودرو اولویت دارد.", 11f, muted, false).apply { setPadding(0, dp(12), 0, dp(4)) })
-        AlertDialog.Builder(this).setTitle(title).setView(box).setPositiveButton("افزودن یادآوری ۱۰هزار کیلومتر") { _, _ ->
-            val currentKm = normalizeDigits(car.optString("km", "0")).filter { it.isDigit() }.toIntOrNull() ?: 0
-            val nextKm = ((currentKm / 10000) + 1) * 10000
-            save("services", JSONObject().put("id", UUID.randomUUID().toString()).put("vehicleId", car.optString("id"))
-                .put("title", "سرویس دوره‌ای و روغن موتور").put("km", nextKm.toString()).put("date", "")
-                .put("note", "بازه پیشنهادی اولیه؛ دفترچه خودرو را بررسی کن").put("created", System.currentTimeMillis()))
-            toast("یادآوری اضافه شد")
+        box.addView(label("برنامه نگهداری داخلی MYCAR • مبنای کارکرد فعلی: ${money(currentKm.toLong())} کیلومتر", 12f, muted, false).apply { setPadding(0, dp(6), 0, dp(10)) })
+        plan.forEach { item ->
+            val row = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(12), dp(10), dp(12), dp(10)); background = rounded(Color.rgb(245, 248, 249), 12) }
+            row.addView(label(item.title, 14f, ink, true))
+            row.addView(label("هر ${money(item.intervalKm.toLong())} کیلومتر یا ${item.intervalMonths} ماه", 12f, teal, true).apply { setPadding(0, dp(4), 0, dp(3)) })
+            row.addView(label(item.detail, 12f, muted, false))
+            box.addView(row, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
+        }
+        box.addView(label("برنامه‌های منتشرشده برای ۲۰۷، تیبا، دنا و X22 در این نسخه مبنای داده‌اند. در مدل‌ها و تیپ‌های دیگر، برخی موعدها برنامه پایه‌اند و با مشخصات دقیق موتور/گیربکس باید تکمیل شوند؛ شرایط سخت رانندگی ممکن است سرویس زودتر بخواهد.", 11f, muted, false).apply { setPadding(0, dp(8), 0, dp(4)) })
+        val scroll = ScrollView(this).apply { addView(box) }
+        AlertDialog.Builder(this).setTitle(title).setView(scroll).setPositiveButton("افزودن یادآوری‌ها") { _, _ ->
+            val currentServices = load("services").filter { it.optString("vehicleId") == car.optString("id") }.toMutableList()
+            var added = 0
+            plan.forEach { item ->
+                if (currentServices.none { it.optString("title") == item.title }) {
+                    save("services", JSONObject().put("id", UUID.randomUUID().toString()).put("vehicleId", car.optString("id"))
+                        .put("title", item.title).put("km", (currentKm + item.intervalKm).toString()).put("date", "")
+                        .put("note", "برنامه MYCAR: هر ${item.intervalKm} کیلومتر یا ${item.intervalMonths} ماه. ${item.detail}")
+                        .put("created", System.currentTimeMillis()))
+                    added++
+                }
+            }
+            toast(if (added > 0) "$added یادآوری اضافه شد" else "یادآوری‌های این برنامه قبلاً اضافه شده‌اند")
+            tab = "سرویس‌ها"; showApp()
         }.setNegativeButton("بستن", null).show()
     }
 
@@ -379,8 +528,8 @@ class MainActivity : Activity() {
         box.addView(label("شماره موبایل", 12f, muted, true))
         box.addView(label(prefs.getString("phone", "") ?: "", 18f, ink, true).apply { setPadding(0, dp(6), 0, dp(14)) })
         box.addView(label("حساب این نسخه آزمایشی روی دستگاه ذخیره می‌شود و پیامک واقعی ارسال نمی‌شود.", 12f, muted, false))
-        box.addView(label("منابع و مجوز عکس‌ها", 14f, ink, true).apply { setPadding(0, dp(16), 0, dp(6)) })
-        box.addView(label("پژو ۲۰۷i: Telluride749 / Wikimedia Commons (CC BY-SA 4.0). MVM X22 و سایپا شاهین: قندون / Wikimedia Commons (CC BY یا CC BY-SA). تارا: Wikimedia Commons (CC BY 4.0). جزئیات و پیوند هر فایل در README پروژه است.", 11f, muted, false))
+        box.addView(label("تصاویر خودرو", 14f, ink, true).apply { setPadding(0, dp(16), 0, dp(6)) })
+        box.addView(label("تصاویر خودرو در MYCAR به‌صورت تصویرسازی گرافیکی داخلی ساخته می‌شوند و عکس واقعی اینترنتی نمایش داده یا دانلود نمی‌شود.", 11f, muted, false))
         AlertDialog.Builder(this).setTitle("پروفایل MYCAR").setView(box).setNegativeButton("بستن", null).setNeutralButton("خروج از حساب") { _, _ -> prefs.edit().putBoolean("logged_in", false).apply(); showPhoneLogin() }.show()
     }
 
@@ -475,20 +624,61 @@ class MainActivity : Activity() {
     private fun save(key: String, value: JSONObject) { saveList(key, load(key) + value) }
     private fun saveList(key: String, values: List<JSONObject>) { val arr = JSONArray(); values.forEach { arr.put(it) }; prefs.edit().putString(key, arr.toString()).apply() }
 
-    private fun loadCarImage(url: String, view: ImageView) {
-        if (url.isBlank()) { view.setImageResource(android.R.drawable.ic_menu_gallery); return }
-        val fileName = "car_" + url.substringAfterLast("/").replace(Regex("[^A-Za-z0-9._-]"), "_") + ".img"
-        val file = File(File(filesDir, "car-images").apply { mkdirs() }, fileName)
-        fun setBitmap(file: File) { try { val bitmap = BitmapFactory.decodeFile(file.absolutePath); if (bitmap != null) runOnUiThread { view.setImageBitmap(bitmap) } } catch (_: Exception) {} }
-        if (file.exists() && file.length() > 0) { setBitmap(file); return }
-        thread {
-            try {
-                val conn = URL(url).openConnection(); conn.connectTimeout = 10000; conn.readTimeout = 15000
-                conn.setRequestProperty("User-Agent", "MYCAR Android App")
-                conn.getInputStream().use { input -> file.outputStream().use { output -> input.copyTo(output) } }
-                setBitmap(file)
-            } catch (_: Exception) { runOnUiThread { view.setImageResource(android.R.drawable.ic_menu_gallery) } }
+    // Original vector-style illustration: no real web photographs are shown or downloaded.
+    private fun setCarIllustration(view: ImageView, model: String, brand: String) {
+        val width = 720
+        val height = 400
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        val hueColor = when {
+            brand.contains("سایپا") -> Color.rgb(44, 116, 139)
+            brand.contains("MVM") || brand.contains("فونیکس") || brand.contains("چری") -> Color.rgb(113, 89, 159)
+            brand.contains("بهمن") || brand.contains("کرمان") -> Color.rgb(28, 125, 116)
+            model.contains("207") || model.contains("۲۰۷") || model.contains("206") -> Color.rgb(24, 113, 131)
+            else -> Color.rgb(41, 89, 111)
         }
+        paint.shader = LinearGradient(0f, 0f, width.toFloat(), height.toFloat(), intArrayOf(Color.rgb(235, 246, 246), Color.rgb(213, 230, 235)), null, Shader.TileMode.CLAMP)
+        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
+        paint.shader = null
+        paint.color = Color.argb(30, 255, 255, 255)
+        canvas.drawCircle(585f, 75f, 94f, paint)
+        canvas.drawCircle(100f, 60f, 48f, paint)
+        paint.color = Color.rgb(194, 213, 218)
+        canvas.drawRoundRect(RectF(0f, 314f, 720f, 400f), 0f, 0f, paint)
+        paint.color = Color.rgb(148, 171, 179)
+        canvas.drawOval(RectF(105f, 300f, 610f, 355f), paint)
+        // Car body silhouette
+        val body = Path().apply {
+            moveTo(110f, 274f); lineTo(142f, 233f); quadTo(164f, 218f, 222f, 214f)
+            lineTo(286f, 158f); quadTo(309f, 139f, 352f, 139f); lineTo(445f, 144f)
+            quadTo(473f, 147f, 498f, 176f); lineTo(546f, 214f); lineTo(590f, 226f)
+            quadTo(613f, 234f, 615f, 257f); lineTo(612f, 282f); quadTo(606f, 296f, 584f, 296f)
+            lineTo(147f, 296f); quadTo(118f, 296f, 110f, 274f); close()
+        }
+        paint.color = hueColor
+        canvas.drawPath(body, paint)
+        // windows
+        val windows = Path().apply {
+            moveTo(248f, 208f); lineTo(300f, 164f); quadTo(312f, 154f, 337f, 154f)
+            lineTo(368f, 154f); lineTo(368f, 208f); close()
+            moveTo(382f, 154f); lineTo(440f, 158f); quadTo(459f, 161f, 474f, 181f)
+            lineTo(496f, 208f); lineTo(382f, 208f); close()
+        }
+        paint.color = Color.rgb(205, 229, 234); canvas.drawPath(windows, paint)
+        paint.color = Color.argb(120, 255, 255, 255); canvas.drawRect(373f, 151f, 379f, 211f, paint)
+        paint.color = Color.rgb(245, 250, 250); canvas.drawRoundRect(RectF(128f, 246f, 170f, 261f), 7f, 7f, paint)
+        paint.color = Color.rgb(255, 202, 117); canvas.drawRoundRect(RectF(574f, 248f, 602f, 261f), 5f, 5f, paint)
+        paint.color = Color.rgb(35, 47, 55)
+        canvas.drawCircle(218f, 290f, 43f, paint); canvas.drawCircle(511f, 290f, 43f, paint)
+        paint.color = Color.rgb(197, 211, 215)
+        canvas.drawCircle(218f, 290f, 23f, paint); canvas.drawCircle(511f, 290f, 23f, paint)
+        paint.color = Color.rgb(110, 132, 141); canvas.drawCircle(218f, 290f, 8f, paint); canvas.drawCircle(511f, 290f, 8f, paint)
+        paint.color = Color.argb(150, 255, 255, 255)
+        canvas.drawRoundRect(RectF(175f, 274f, 540f, 280f), 3f, 3f, paint)
+        view.setImageBitmap(bitmap)
+        view.scaleType = ImageView.ScaleType.CENTER_CROP
+        view.contentDescription = "تصویرسازی گرافیکی خودرو $model"
     }
 
     private fun card(parent: LinearLayout, contentBlock: LinearLayout.() -> Unit) {
