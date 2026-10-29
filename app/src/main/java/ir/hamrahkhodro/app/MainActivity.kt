@@ -2,6 +2,18 @@ package ir.hamrahkhodro.app
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.app.DatePickerDialog
+import android.content.Intent
+import android.net.Uri
+import android.graphics.BitmapFactory
+import android.graphics.drawable.BitmapDrawable
+import android.widget.DatePicker
+import android.widget.NumberPicker
+import java.net.HttpURLConnection
+import java.net.URL
+import java.io.File
+import java.io.FileOutputStream
+import java.util.Calendar
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -24,6 +36,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.text.NumberFormat
 import java.util.Locale
+import java.util.GregorianCalendar
 import java.util.UUID
 
 class MainActivity : Activity() {
@@ -39,6 +52,10 @@ class MainActivity : Activity() {
     private var tab = "خانه"
     private val mainHandler = Handler(Looper.getMainLooper())
     private var otpRunnable: Runnable? = null
+    private var dateCalendar = "شمسی"
+    private var expenseCategoryFilter = "همه"
+    private var expensePeriodFilter = "همه زمان‌ها"
+    private var vazirTypeface: Typeface? = null
 
     data class CarModel(val brand: String, val name: String, val image: String = "")
     data class MaintenanceItem(val title: String, val intervalKm: Int, val intervalMonths: Int, val detail: String)
@@ -107,6 +124,7 @@ class MainActivity : Activity() {
         window.statusBarColor = deep
         window.navigationBarColor = page
         window.decorView.layoutDirection = View.LAYOUT_DIRECTION_RTL
+        loadVazirmatn()
         if (prefs.getBoolean("logged_in", false)) showApp() else showPhoneLogin()
     }
 
@@ -157,7 +175,7 @@ class MainActivity : Activity() {
             addView(label("نسخه آزمایشی: پیامک واقعی ارسال نمی‌شود؛ کد تست 12345 است.", 12f, muted, false).apply { setPadding(0, dp(10), 0, 0) })
         }
         body.addView(label("اطلاعات این نسخه روی همین گوشی ذخیره می‌شود.", 12f, muted, false).apply { gravity = Gravity.CENTER; setPadding(0, dp(22), 0, 0) })
-        scroller.addView(body); root.addView(scroller); setContentView(root)
+        scroller.addView(body); root.addView(scroller); setContentView(root); applyVazirmatn(root)
     }
 
     private fun showOtp(phone: String) {
@@ -261,7 +279,7 @@ class MainActivity : Activity() {
             "هزینه‌ها" -> expensesScreen()
         }
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
-        setContentView(root)
+        setContentView(root); applyVazirmatn(root)
     }
 
     private fun home() {
@@ -285,7 +303,7 @@ class MainActivity : Activity() {
                 val line = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
                 val img = ImageView(this@MainActivity).apply { scaleType = ImageView.ScaleType.CENTER_CROP; background = rounded(Color.rgb(236, 241, 243), 12) }
                 line.addView(img, LinearLayout.LayoutParams(dp(112), dp(78)))
-                setCarIllustration(img, selected.optString("model"), selected.optString("brand"))
+                setCarIllustration(img, selected.optString("model"), selected.optString("brand")); loadRealCarPhoto(img, selected.optString("model"), selected.optString("brand"))
                 val info = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(12), 0, 0, 0); layoutParams = LinearLayout.LayoutParams(0, -2, 1f) }
                 info.addView(label(selected.optString("model"), 17f, ink, true))
                 info.addView(label("${selected.optString("brand")} • ${selected.optString("year", "سال نامشخص")}", 12f, muted, false).apply { setPadding(0, dp(4), 0, 0) })
@@ -293,6 +311,7 @@ class MainActivity : Activity() {
                 line.addView(info); addView(line)
                 actionButtonIn(this, "جابجایی بین خودروها / پروفایل‌ها", false) { chooseCarProfile() }
             }
+            marketPriceCard(selected)
             // Insurance reminders
             val bodyExp = selected.optString("bodyInsuranceExpiry", "")
             val thirdExp = selected.optString("thirdPartyInsuranceExpiry", "")
@@ -344,7 +363,7 @@ class MainActivity : Activity() {
             card(content) {
                 val row = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
                 val image = ImageView(this@MainActivity).apply { scaleType = ImageView.ScaleType.CENTER_CROP; background = rounded(Color.rgb(236, 241, 243), 12) }
-                row.addView(image, LinearLayout.LayoutParams(dp(108), dp(82))); setCarIllustration(image, car.optString("model"), car.optString("brand"))
+                row.addView(image, LinearLayout.LayoutParams(dp(108), dp(82))); setCarIllustration(image, car.optString("model"), car.optString("brand")); loadRealCarPhoto(image, car.optString("model"), car.optString("brand"))
                 val info = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(12), 0, 0, 0); layoutParams = LinearLayout.LayoutParams(0, -2, 1f) }
                 info.addView(label(car.optString("model"), 16f, ink, true))
                 info.addView(label("${car.optString("brand")} • ${car.optString("year", "سال نامشخص")}", 12f, muted, false).apply { setPadding(0, dp(4), 0, 0) })
@@ -372,12 +391,17 @@ class MainActivity : Activity() {
         val year = field("سال ساخت (مثلاً ۱۴۰۱)")
         val km = field("کارکرد فعلی به کیلومتر", "0", true)
         val plate = field("پلاک یا نام دلخواه (اختیاری)")
-        val bodyIns = field("تاریخ اتمام بیمه بدنه (مثلاً 1404/08/15) — یک‌ساله")
-        val thirdIns = field("تاریخ اتمام بیمه شخص ثالث (مثلاً 1404/08/15) — یک‌ساله")
+        val bodyIns = dateField("تاریخ اتمام بیمه بدنه (تقویم شمسی/میلادی)")
+        val thirdIns = dateField("تاریخ اتمام بیمه شخص ثالث (تقویم شمسی/میلادی)")
         box.addView(label("برند خودرو", 12f, muted, true)); box.addView(brandSpinner)
         box.addView(label("مدل خودرو", 12f, muted, true).apply { setPadding(0, dp(8), 0, 0) }); box.addView(modelSpinner)
         box.addView(label("اطلاعات پایه", 13f, ink, true).apply { setPadding(0, dp(10), 0, dp(4) ) })
-        box.addView(year); box.addView(km); box.addView(plate)
+        box.addView(year)
+        box.addView(label("کارکرد فعلی خودرو", 12f, muted, true).apply { setPadding(0, dp(8), 0, dp(4)) })
+        box.addView(km)
+        val mileagePresets = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER; setPadding(0, dp(4), 0, dp(4)) }
+        listOf(0, 50000, 100000, 150000, 200000).forEach { value -> val preset = TextView(this).apply { text = if(value==0) "صفر" else "${value/1000}هزار"; textSize=10f; gravity=Gravity.CENTER; setTextColor(teal); background=rounded(accent,9); setPadding(dp(6),dp(8),dp(6),dp(8)); setOnClickListener { km.setText(value.toString()) } }; mileagePresets.addView(preset, LinearLayout.LayoutParams(0,-2,1f).apply { marginStart=dp(2); marginEnd=dp(2) }) }
+        box.addView(mileagePresets); box.addView(plate)
         box.addView(label("بیمه (مدت اعتبار یک سال)", 13f, ink, true).apply { setPadding(0, dp(12), 0, dp(4) ) })
         box.addView(bodyIns); box.addView(thirdIns)
         box.addView(label("یادآوری انقضای بیمه در داشبورد نمایش داده می‌شود.", 11f, muted, false).apply { setPadding(0, dp(6), 0, 0) })
@@ -538,7 +562,10 @@ class MainActivity : Activity() {
         actionButton("＋ افزودن یادآوری دلخواه", false) { addService() }
         val items = load("services").filter { it.optString("vehicleId") == car.optString("id") }
         if (items.isEmpty()) emptyState(content, "هنوز یادآوری‌ای ثبت نشده", "از برنامه پیشنهادی یا دکمه افزودن یادآوری استفاده کن.")
-        items.forEach { itemCard(content, it, "service") }
+        val groups = linkedMapOf("روغن و فیلترها" to listOf("روغن", "فیلتر"), "تسمه‌ها و موتور" to listOf("تسمه", "شمع", "موتور"), "ترمز، تایر و ایمنی" to listOf("ترمز", "تایر", "تعلیق", "ایمنی"), "مایعات و خنک‌کاری" to listOf("مایع", "خنک", "گیربکس", "روغن ترمز"), "سایر سرویس‌ها" to emptyList())
+        val used=mutableSetOf<String>()
+        groups.forEach { (group,keys) -> val subset=items.filter { item -> !used.contains(item.optString("id")) && item.optString("title").containsAny(keys) }; if(subset.isNotEmpty()){ sectionTitle(content,group); subset.forEach { itemCard(content,it,"service"); used.add(it.optString("id")) } } }
+        val rest=items.filterNot { used.contains(it.optString("id")) }; if(rest.isNotEmpty()){ sectionTitle(content,"سایر موارد"); rest.forEach { itemCard(content,it,"service") } }
     }
 
     private fun historyScreen() {
@@ -554,16 +581,40 @@ class MainActivity : Activity() {
     private fun expensesScreen() {
         val car = selectedCar()
         if (car == null) { emptyState(content, "ابتدا خودرو اضافه کن", "هزینه‌ها به هر خودرو متصل هستند."); actionButton("＋ افزودن خودرو", true) { addVehicle() }; return }
-        val items = load("expenses").filter { it.optString("vehicleId") == car.optString("id") }
-        val total = items.sumOf { it.optLong("amount", 0L) }
+        val all = load("expenses").filter { it.optString("vehicleId") == car.optString("id") }
+        val categories = listOf("همه", "سوخت", "سرویس و تعمیر", "بیمه و عوارض", "پارکینگ و کارواش", "قطعات و لوازم", "سایر")
+        val periods = listOf("همه زمان‌ها", "۳۰ روز اخیر", "۹۰ روز اخیر", "۱۲ ماه اخیر")
         card(content) {
-            addView(label("مجموع هزینه‌های ${car.optString("model")}", 13f, muted, true))
-            addView(label("${money(total)} تومان", 24f, teal, true).apply { setPadding(0, dp(7), 0, 0) })
+            addView(label("گزارش هزینه‌های ${car.optString("model")}", 16f, ink, true))
+            addView(label("فیلتر و تحلیل هزینه‌ها بر اساس دسته و بازه زمانی", 12f, muted, false).apply { setPadding(0,dp(5),0,dp(12)) })
+            val cat = Spinner(this@MainActivity).apply { adapter=ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, categories); setSelection(categories.indexOf(expenseCategoryFilter).coerceAtLeast(0)); onItemSelectedListener=object: android.widget.AdapterView.OnItemSelectedListener { override fun onItemSelected(p: android.widget.AdapterView<*>?,v:View?,pos:Int,id:Long){ if(expenseCategoryFilter!=categories[pos]) { expenseCategoryFilter=categories[pos]; showApp() } }; override fun onNothingSelected(p: android.widget.AdapterView<*>?){} } }
+            addView(label("دسته‌بندی", 12f, muted, true)); addView(cat)
+            val period = Spinner(this@MainActivity).apply { adapter=ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, periods); setSelection(periods.indexOf(expensePeriodFilter).coerceAtLeast(0)); onItemSelectedListener=object: android.widget.AdapterView.OnItemSelectedListener { override fun onItemSelected(p: android.widget.AdapterView<*>?,v:View?,pos:Int,id:Long){ if(expensePeriodFilter!=periods[pos]) { expensePeriodFilter=periods[pos]; showApp() } }; override fun onNothingSelected(p: android.widget.AdapterView<*>?){} } }
+            addView(label("بازه زمانی", 12f, muted, true).apply { setPadding(0,dp(8),0,0) }); addView(period)
         }
-        sectionTitle(content, "ریز هزینه‌ها")
+        val cutoff = when(expensePeriodFilter) { "۳۰ روز اخیر" -> System.currentTimeMillis()-30L*86400000; "۹۰ روز اخیر" -> System.currentTimeMillis()-90L*86400000; "۱۲ ماه اخیر" -> System.currentTimeMillis()-365L*86400000; else -> 0L }
+        val timed = all.filter { it.optLong("created",0L) >= cutoff }
+        val items = timed.filter { expenseCategoryFilter=="همه" || it.optString("category")==expenseCategoryFilter }
+        val total = items.sumOf { it.optLong("amount") }
+        val avg = if(items.isEmpty()) 0L else total/items.size
+        val metrics = LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL }
+        metric(metrics,"جمع هزینه فیلترشده",moneyShort(total)); metric(metrics,"تعداد",items.size.toString()); metric(metrics,"میانگین",moneyShort(avg)); content.addView(metrics)
+        sectionTitle(content,"تفکیک هزینه بر اساس دسته")
+        val categoryTotals = timed.groupBy { it.optString("category","سایر") }.mapValues { entry -> entry.value.sumOf { it.optLong("amount") } }.toList().sortedByDescending { it.second }
+        if(categoryTotals.isEmpty()) emptyState(content,"داده‌ای برای نمودار نیست","با ثبت هزینه، گزارش دسته‌بندی‌شده اینجا نمایش داده می‌شود.") else {
+            val max = categoryTotals.maxOf { it.second }.coerceAtLeast(1L)
+            categoryTotals.forEach { (name,value) ->
+                val row=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(0,dp(4),0,dp(8)) }
+                val line=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER_VERTICAL }
+                line.addView(label(name,12f,ink,true),LinearLayout.LayoutParams(0,-2,1f)); line.addView(label("${money(value)} تومان",12f,teal,true)); row.addView(line)
+                val bar=ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal).apply { max=100; progress=((value*100/max).toInt()).coerceIn(1,100); progressTintList=android.content.res.ColorStateList.valueOf(teal); progressBackgroundTintList=android.content.res.ColorStateList.valueOf(Color.rgb(230,238,239)) }
+                row.addView(bar,LinearLayout.LayoutParams(-1,dp(7))); content.addView(row)
+            }
+        }
+        sectionTitle(content,"ریز هزینه‌ها")
         actionButton("＋ ثبت هزینه جدید", true) { addExpense() }
-        if (items.isEmpty()) emptyState(content, "هنوز هزینه‌ای ثبت نشده", "هزینه بنزین، تعمیر، بیمه و سرویس را ثبت کن.")
-        items.forEach { itemCard(content, it, "expense") }
+        if (items.isEmpty()) emptyState(content,"هزینه‌ای با این فیلتر نیست","فیلتر دسته یا بازه زمانی را تغییر بده.")
+        items.forEach { itemCard(content,it,"expense") }
     }
 
     private fun profileScreen() {
@@ -572,7 +623,7 @@ class MainActivity : Activity() {
         box.addView(label(prefs.getString("phone", "") ?: "", 18f, ink, true).apply { setPadding(0, dp(6), 0, dp(14)) })
         box.addView(label("حساب این نسخه آزمایشی روی دستگاه ذخیره می‌شود و پیامک واقعی ارسال نمی‌شود.", 12f, muted, false))
         box.addView(label("تصاویر خودرو", 14f, ink, true).apply { setPadding(0, dp(16), 0, dp(6)) })
-        box.addView(label("تصاویر خودرو در MYCAR به‌صورت تصویرسازی گرافیکی داخلی ساخته می‌شوند و عکس واقعی اینترنتی نمایش داده یا دانلود نمی‌شود.", 11f, muted, false))
+        box.addView(label("عکس واقعی خودروها در صورت اتصال اینترنت از ویکی‌مدیا دریافت می‌شود؛ در صورت نبود اینترنت، تصویر جایگزین نمایش داده می‌شود.", 11f, muted, false))
         AlertDialog.Builder(this).setTitle("پروفایل MYCAR").setView(box).setNegativeButton("بستن", null).setNeutralButton("خروج از حساب") { _, _ -> prefs.edit().putBoolean("logged_in", false).apply(); showPhoneLogin() }.show()
     }
 
@@ -581,7 +632,7 @@ class MainActivity : Activity() {
         val box = formBox()
         val title = field("عنوان یادآوری (مثلاً روغن موتور)")
         val dueKm = field("کیلومتر یادآوری (اختیاری)", "", true)
-        val dueDate = field("تاریخ یادآوری شمسی (اختیاری)", "مثلاً ۱۴۰۵/۰۹/۱۵")
+        val dueDate = dateField("تاریخ یادآوری (اختیاری)")
         val note = field("توضیحات (اختیاری)")
         listOf(title, dueKm, dueDate, note).forEach { box.addView(it) }
         AlertDialog.Builder(this).setTitle("یادآوری سرویس").setView(box).setNegativeButton("انصراف", null).setPositiveButton("ثبت") { _, _ ->
@@ -596,7 +647,7 @@ class MainActivity : Activity() {
         val car = selectedCar() ?: run { toast("ابتدا خودرو اضافه کن"); addVehicle(); return }
         val box = formBox()
         val title = field("عنوان سرویس یا تعمیر")
-        val date = field("تاریخ انجام (شمسی)", "۱۴۰۵/۰۸/۰۷")
+        val date = dateField("تاریخ انجام سرویس")
         val km = field("کارکرد خودرو به کیلومتر", car.optString("km", "0"), true)
         val place = field("محل انجام / نام تعمیرگاه")
         val amount = field("هزینه به تومان", "0", true)
@@ -622,8 +673,8 @@ class MainActivity : Activity() {
     private fun addExpense() {
         val car = selectedCar() ?: run { toast("ابتدا خودرو اضافه کن"); addVehicle(); return }
         val box = formBox(); val title = field("عنوان هزینه")
-        val category = Spinner(this).apply { adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("سوخت", "سرویس و تعمیر", "بیمه و عوارض", "پارکینگ و کارواش", "سایر")) }
-        val amount = field("مبلغ به تومان", "", true); val date = field("تاریخ شمسی", "۱۴۰۵/۰۸/۰۷"); val place = field("محل خرید یا انجام (اختیاری)")
+        val category = Spinner(this).apply { adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf("سوخت", "سرویس و تعمیر", "قطعات و لوازم", "بیمه و عوارض", "پارکینگ و کارواش", "سایر")) }
+        val amount = field("مبلغ به تومان", "", true); val date = dateField("تاریخ هزینه"); val place = field("محل خرید یا انجام (اختیاری)")
         box.addView(title); box.addView(category); box.addView(amount); box.addView(date); box.addView(place)
         AlertDialog.Builder(this).setTitle("ثبت هزینه خودرو").setView(box).setNegativeButton("انصراف", null).setPositiveButton("ثبت") { _, _ ->
             val cost = normalizeDigits(amount.text.toString()).filter { it.isDigit() }.toLongOrNull()
@@ -667,7 +718,98 @@ class MainActivity : Activity() {
     private fun save(key: String, value: JSONObject) { saveList(key, load(key) + value) }
     private fun saveList(key: String, values: List<JSONObject>) { val arr = JSONArray(); values.forEach { arr.put(it) }; prefs.edit().putString(key, arr.toString()).apply() }
 
-    // Original vector-style illustration: no real web photographs are shown or downloaded.
+    private fun String.containsAny(values: List<String>): Boolean = values.isNotEmpty() && values.any { this.contains(it, ignoreCase = true) }
+
+    private fun dateField(hintText: String): EditText = field(hintText, "", false).apply {
+        isFocusable = false; isClickable = true; compoundDrawablePadding=dp(8)
+        setCompoundDrawablesWithIntrinsicBounds(0,0,0,0)
+        setOnClickListener { chooseDate(this) }
+        setOnLongClickListener { chooseDate(this); true }
+    }
+
+    private fun chooseDate(target: EditText) {
+        val options = arrayOf("تقویم شمسی", "تقویم میلادی")
+        AlertDialog.Builder(this).setTitle("انتخاب نوع تقویم").setItems(options) { _, which ->
+            dateCalendar = if(which==0) "شمسی" else "میلادی"
+            if(which==1) {
+                val c=Calendar.getInstance()
+                DatePickerDialog(this,{ _:DatePicker,y:Int,m:Int,d:Int -> target.setText("%04d/%02d/%02d".format(y,m+1,d)) },c.get(Calendar.YEAR),c.get(Calendar.MONTH),c.get(Calendar.DAY_OF_MONTH)).show()
+            } else showJalaliPicker(target)
+        }.show()
+    }
+
+    private fun showJalaliPicker(target: EditText) {
+        val box=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER; setPadding(dp(12),dp(8),dp(12),dp(8)) }
+        val year=NumberPicker(this).apply { minValue=1300; maxValue=1500; value=1405; wrapSelectorWheel=false }
+        val month=NumberPicker(this).apply { minValue=1; maxValue=12; value=8; displayedValues=arrayOf("فروردین","اردیبهشت","خرداد","تیر","مرداد","شهریور","مهر","آبان","آذر","دی","بهمن","اسفند"); wrapSelectorWheel=true }
+        val day=NumberPicker(this).apply { minValue=1; maxValue=31; value=1; wrapSelectorWheel=true }
+        box.addView(year,LinearLayout.LayoutParams(0,dp(150),1f)); box.addView(month,LinearLayout.LayoutParams(0,dp(150),1f)); box.addView(day,LinearLayout.LayoutParams(0,dp(150),1f))
+        month.setOnValueChangedListener { _,_,v -> day.maxValue=if(v<=6)31 else if(v<=11)30 else if(isJalaliLeap(year.value))30 else 29; if(day.value>day.maxValue)day.value=day.maxValue }
+        year.setOnValueChangedListener { _,_,_ -> if(month.value==12){day.maxValue=if(isJalaliLeap(year.value))30 else 29;if(day.value>day.maxValue)day.value=day.maxValue} }
+        AlertDialog.Builder(this).setTitle("انتخاب تاریخ شمسی").setView(box).setNegativeButton("لغو",null).setPositiveButton("انتخاب") { _,_ -> target.setText("%04d/%02d/%02d".format(year.value,month.value,day.value)) }.show()
+    }
+    private fun isJalaliLeap(y:Int):Boolean { val breaks=intArrayOf(-61,9,38,199,426,686,756,818,1111,1181,1210,1635,2060,2097,2192,2262,2324,2394,2456,3178); var jp=breaks[0]; var jump=0; for(i in 1 until breaks.size){ val jm=breaks[i]; jump=jm-jp; if(y<jm)break; jp=jm }; val n=y-jp; if(n<jump){ var r=(n* (jump/33.0)).toInt()%4; if(jump-r==4)r=4; return r==0 }; return false }
+
+    private fun loadVazirmatn() {
+        Thread {
+            try {
+                val file=File(filesDir,"Vazirmatn-Regular.ttf")
+                if(!file.exists()) { val conn=URL("https://raw.githubusercontent.com/rastikerdar/vazirmatn/master/fonts/ttf/Vazirmatn-Regular.ttf").openConnection() as HttpURLConnection; conn.connectTimeout=5000; conn.readTimeout=7000; conn.inputStream.use { input -> FileOutputStream(file).use { input.copyTo(it) } }; conn.disconnect() }
+                val face=Typeface.createFromFile(file); runOnUiThread { vazirTypeface=face; if(::root.isInitialized) applyVazirmatn(root) }
+            } catch (_:Exception) { /* use Android's Persian-capable fallback font while offline */ }
+        }.start()
+    }
+    private fun applyVazirmatn(view: View) {
+        val face=vazirTypeface ?: return
+        if(view is TextView) view.typeface=face
+        if(view is android.view.ViewGroup) for(i in 0 until view.childCount) applyVazirmatn(view.getChildAt(i))
+    }
+
+    private fun loadRealCarPhoto(view: ImageView, model: String, brand: String) {
+        val query = java.net.URLEncoder.encode("${model} ${brand} car", "UTF-8")
+        Thread {
+            try {
+                val api="https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=${query}&gsrnamespace=6&gsrlimit=8&prop=imageinfo&iiprop=url&iiurlwidth=900&format=json"
+                val conn=URL(api).openConnection() as HttpURLConnection; conn.connectTimeout=6000; conn.readTimeout=7000; conn.setRequestProperty("User-Agent","MYCAR-MaintenanceApp/1.5 (photo lookup)")
+                val json=org.json.JSONObject(conn.inputStream.bufferedReader().use { it.readText() }); conn.disconnect()
+                val pages=json.optJSONObject("query")?.optJSONObject("pages") ?: return@Thread
+                val candidates=(0 until pages.length()).mapNotNull { pages.optJSONObject(pages.names().optString(it)) }.mapNotNull { it.optJSONArray("imageinfo")?.optJSONObject(0)?.optString("thumburl")?.takeIf { u -> u.startsWith("https://") } }
+                val photoUrl=candidates.firstOrNull() ?: return@Thread
+                val imageConn=URL(photoUrl).openConnection() as HttpURLConnection; imageConn.connectTimeout=6000; imageConn.readTimeout=7000
+                val bitmap=imageConn.inputStream.use { BitmapFactory.decodeStream(it) }; imageConn.disconnect()
+                if(bitmap!=null) runOnUiThread { if(view.isAttachedToWindow) { view.setImageBitmap(bitmap); view.contentDescription="عکس واقعی ${brand} ${model} از ویکی‌مدیا" } }
+            } catch (_:Exception) { /* illustration remains as an offline fallback */ }
+        }.start()
+    }
+
+    private fun marketPriceCard(car: JSONObject) {
+        val model=car.optString("model"); val year=normalizeDigits(car.optString("year")).toIntOrNull() ?: 1400
+        val km=normalizeDigits(car.optString("km","0")).filter { it.isDigit() }.toLongOrNull() ?: 0L
+        val baseline:Long?=when {
+            model.contains("۲۰۷") || model.contains("207") -> if(model.contains("اتومات")) 3_700_000_000L else 2_600_000_000L
+            model.contains("دنا") -> if(model.contains("اتومات")) 3_750_000_000L else 2_850_000_000L
+            model.contains("تارا") -> if(model.contains("اتومات")) 3_400_000_000L else 2_850_000_000L
+            model.contains("شاهین") -> if(model.contains("اتومات")) 2_900_000_000L else 2_300_000_000L
+            model.contains("کوییک") -> 1_600_000_000L
+            model.contains("ساینا") -> 1_650_000_000L
+            model.contains("ری‌را") -> 4_700_000_000L
+            model.contains("سورن") -> 2_600_000_000L
+            model.contains("رانا") -> 2_200_000_000L
+            model.contains("X22") -> 3_300_000_000L
+            else -> null
+        }
+        card(content) {
+            addView(label("برآورد ارزش بازار خودرو",15f,ink,true))
+            if(baseline==null) addView(label("برای این مدل داده مرجع کافی نداریم؛ استعلام آگهی‌های روز را باز کن.",12f,muted,false).apply { setPadding(0,dp(6),0,dp(6)) }) else {
+                val age=(1405-year).coerceAtLeast(0); val factor=(1.0-age*0.035-km/1000000.0*0.10).coerceIn(0.55,1.0); val estimate=(baseline*factor).toLong(); val low=(estimate*0.92).toLong(); val high=(estimate*1.08).toLong()
+                addView(label("${money(low)} تا ${money(high)} تومان",20f,teal,true).apply { setPadding(0,dp(8),0,dp(3)) })
+                addView(label("برآورد تقریبی بر پایه مدل، سال ساخت و کارکرد؛ نه قیمت قطعی معامله. وضعیت بدنه، تیپ، گیربکس و شهر می‌تواند اختلاف زیادی ایجاد کند.",11f,muted,false))
+            }
+            actionButtonIn(this,"استعلام قیمت‌های روز در وب",false) { try { startActivity(Intent(Intent.ACTION_VIEW,Uri.parse("https://www.google.com/search?q="+Uri.encode("قیمت روز بازار ${model} ${car.optString("year")}")))) } catch (_:Exception) { toast("مرورگر در دسترس نیست") } }
+        }
+    }
+
+    // Local fallback illustration; a real Wikimedia Commons photo replaces it when online.
     private fun setCarIllustration(view: ImageView, model: String, brand: String) {
         val width = 720
         val height = 400
@@ -744,9 +886,9 @@ class MainActivity : Activity() {
         val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; setPadding(dp(4), dp(13), dp(4), dp(13)); background = rounded(Color.WHITE, 14); addView(label(value, 16f, teal, true)); addView(label(caption, 10f, muted, false).apply { setPadding(0, dp(5), 0, 0); gravity = Gravity.CENTER }) }
         parent.addView(box, LinearLayout.LayoutParams(0, -1, 1f).apply { marginStart = dp(3); marginEnd = dp(3); bottomMargin = dp(12) })
     }
-    private fun label(text: String, size: Float, color: Int, bold: Boolean): TextView = TextView(this).apply { this.text = text; textSize = size; setTextColor(color); gravity = Gravity.START; if (bold) typeface = Typeface.DEFAULT_BOLD }
+    private fun label(text: String, size: Float, color: Int, bold: Boolean): TextView = TextView(this).apply { this.text = text; textSize = size; setTextColor(color); gravity = Gravity.START; if (bold) typeface = Typeface.DEFAULT_BOLD; vazirTypeface?.let { typeface = it } }
     private fun field(hintText: String, initial: String = "", numeric: Boolean = false): EditText = EditText(this).apply {
-        hint = hintText; setText(initial); textSize = 14f; isSingleLine = true; setTextColor(ink); setHintTextColor(muted); layoutDirection = View.LAYOUT_DIRECTION_RTL
+        hint = hintText; setText(initial); textSize = 14f; vazirTypeface?.let { typeface = it }; isSingleLine = true; setTextColor(ink); setHintTextColor(muted); layoutDirection = View.LAYOUT_DIRECTION_RTL
         if (numeric) inputType = InputType.TYPE_CLASS_NUMBER
         setPadding(dp(14), dp(12), dp(14), dp(12))
         background = rounded(Color.rgb(248, 250, 251), 12)
