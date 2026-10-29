@@ -602,12 +602,12 @@ class MainActivity : Activity() {
         sectionTitle(content,"تفکیک هزینه بر اساس دسته")
         val categoryTotals = timed.groupBy { it.optString("category","سایر") }.mapValues { entry -> entry.value.sumOf { it.optLong("amount") } }.toList().sortedByDescending { it.second }
         if(categoryTotals.isEmpty()) emptyState(content,"داده‌ای برای نمودار نیست","با ثبت هزینه، گزارش دسته‌بندی‌شده اینجا نمایش داده می‌شود.") else {
-            val max = categoryTotals.maxOf { it.second }.coerceAtLeast(1L)
+            val maxAmount = categoryTotals.maxOf { it.second }.coerceAtLeast(1L)
             categoryTotals.forEach { (name,value) ->
                 val row=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(0,dp(4),0,dp(8)) }
                 val line=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER_VERTICAL }
                 line.addView(label(name,12f,ink,true),LinearLayout.LayoutParams(0,-2,1f)); line.addView(label("${money(value)} تومان",12f,teal,true)); row.addView(line)
-                val bar=ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal).apply { max=100; progress=((value*100/max).toInt()).coerceIn(1,100); progressTintList=android.content.res.ColorStateList.valueOf(teal); progressBackgroundTintList=android.content.res.ColorStateList.valueOf(Color.rgb(230,238,239)) }
+                val bar=ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal).apply { max=100; progress=((value*100/maxAmount).toInt()).coerceIn(1,100); progressTintList=android.content.res.ColorStateList.valueOf(teal); progressBackgroundTintList=android.content.res.ColorStateList.valueOf(Color.rgb(230,238,239)) }
                 row.addView(bar,LinearLayout.LayoutParams(-1,dp(7))); content.addView(row)
             }
         }
