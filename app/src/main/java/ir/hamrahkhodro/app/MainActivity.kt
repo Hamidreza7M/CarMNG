@@ -259,10 +259,12 @@ class MainActivity : Activity() {
     private fun kindKey(kind: String) = when (kind) { "service" -> "services"; "history" -> "history"; else -> "expenses" }
 
     private fun remove(key: String, item: JSONObject) {
-        val old = load(key); val fresh = JSONArray()
-        for (i in 0 until old.length()) {
-            val candidate = old.optJSONObject(i) ?: continue
-            if (candidate.optLong("created", -1L) != item.optLong("created", -2L)) fresh.put(candidate)
+        val old = load(key)
+        val fresh = JSONArray()
+        old.forEach { candidate ->
+            if (candidate.optLong("created", -1L) != item.optLong("created", -2L)) {
+                fresh.put(candidate)
+            }
         }
         prefs.edit().putString(key, fresh.toString()).apply()
     }
@@ -321,7 +323,7 @@ class MainActivity : Activity() {
     }
 
     private fun field(hintText: String, initial: String = "", numeric: Boolean = false): EditText = EditText(this).apply {
-        hint = hintText; setText(initial); textSize = 14f; singleLine = true; setTextColor(ink); setHintTextColor(muted)
+        hint = hintText; setText(initial); textSize = 14f; isSingleLine = true; setTextColor(ink); setHintTextColor(muted)
         layoutDirection = View.LAYOUT_DIRECTION_RTL
         if (numeric) inputType = android.text.InputType.TYPE_CLASS_NUMBER
         setPadding(dp(10), dp(5), dp(10), dp(5))
